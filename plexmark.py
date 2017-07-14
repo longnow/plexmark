@@ -24,6 +24,18 @@ async def run_in_process(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, functools.partial(*args, **kwargs))
 
+@asyncio.coroutine
+def pickle_load(path):
+    return pickle.load(open(path), 'rb')
+
+@asyncio.coroutine
+def pickle_dump(obj, path):
+    pickle.dump(obj, open(path, 'wb'), pickle.HIGHEST_PROTOCOL)
+
+@asyncio.coroutine
+def makedirs(path):
+    os.makedirs(path, exist_ok=True)
+
 class PLText(markovify.Text):
 
     def __init__(self, input_text, state_size=2, chain=None, parsed_sentences=None):
@@ -83,7 +95,7 @@ async def pull_expr_from_db(uid):
 
 async def pull_expr(uid):
     try:
-        parsed_sentences = pickle.load(open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'rb'))
+        parsed_sentences = await pickle_load(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
     except (FileNotFoundError, EOFError):
         print('fetching expressions for {}'.format(uid))
         expr_score_list = await pull_expr_from_db(uid)
@@ -92,8 +104,8 @@ async def pull_expr(uid):
     return parsed_sentences
 
 async def pickle_expr(uid, parsed_sentences):
-    os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
-    pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
+    await makedirs(os.path.join(DATA_DIR, uid))
+    await pickle_dump(parsed_sentences, os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
 
 async def generate_model(uid, state_size):
     parsed_sentences = await pull_expr(uid)
@@ -105,7 +117,7 @@ async def pull_model(uid, state_size):
         pltext = model_cache[(uid, state_size)]
     except KeyError:
         try:
-            pltext = pickle.load(open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'rb'))
+            pltext = await pickle_load(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'))
         except (FileNotFoundError, EOFError):
             pltext = await generate_model(uid, state_size)
             asyncio.ensure_future(pickle_model(uid, state_size, pltext))
@@ -113,8 +125,8 @@ async def pull_model(uid, state_size):
     return pltext
 
 async def pickle_model(uid, state_size, pltext):
-    os.makedirs(os.path.join(DATA_DIR, uid))
-    pickle.dump(pltext, open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
+    await makedirs(os.path.join(DATA_DIR, uid))
+    await pickle_dump(pltext, os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'))
 
 def cleanup(max_age=604800):
     uid_list = [os.path.basename(filename) for filename in glob(os.path.join(DATA_DIR, '*'))]
