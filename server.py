@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from sanic import Sanic
+from sanic import Sanic, response
 from sanic.response import json
 import config
 import plexmark
@@ -29,7 +29,7 @@ async def cleanup(request):
         max_age = config.CLEANUP_MAX_AGE
 
     await plexmark.cleanup(max_age)
-    return ''
+    return response.text('')
 
 if __name__ == "__main__":
     from plexmark import PLText, PLChain
