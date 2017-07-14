@@ -7,6 +7,7 @@ import config
 import plexmark
 
 app = Sanic()
+app.config.from_object(config)
 
 @app.listener("before_server_start")
 async def init(app, loop):
