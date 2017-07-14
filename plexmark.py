@@ -88,7 +88,7 @@ async def pull_expr_from_db(uid):
         """
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(query, (uid,))
+            await cur.execute(query, (uid,), timeout=config.REQUEST_TIMEOUT)
             return await cur.fetchall()
 
 async def pull_expr(uid):
