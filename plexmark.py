@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pickle, os, time, concurrent, asyncio, functools
+import pickle, os, time, asyncio, concurrent, functools
 from glob import glob
 import cachetools
 import markovify
@@ -68,6 +68,16 @@ class PLChain(markovify.Chain):
                 model[state][follow] += score
         return model
 
+async def pull_expr(uid):
+    try:
+        parsed_sentences = pickle.load(open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'rb'))
+    except (FileNotFoundError, EOFError):
+        print('fetching expressions for {}'.format(uid))
+        expr_score_list = await pull_expr_from_db(uid)
+        parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
+        asyncio.ensure_future(pickle_expr(uid, parsed_sentences))
+    return parsed_sentences
+
 async def pull_expr_from_db(uid):
     query = """
         SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
@@ -81,22 +91,15 @@ async def pull_expr_from_db(uid):
             await cur.execute(query, (uid,))
             return await cur.fetchall()
 
-async def pull_expr(uid):
-    print('fetching expressions for {}'.format(uid))
-    expr_score_list = await pull_expr_from_db(uid)
-    parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
+async def pickle_expr(uid, parsed_sentences):
     try:
         pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
     except FileNotFoundError:
         os.makedirs(os.path.join(DATA_DIR, uid))
         pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
-    return parsed_sentences
 
 async def generate_model(uid, state_size):
-    try:
-        parsed_sentences = pickle.load(open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'rb'))
-    except (FileNotFoundError, EOFError):
-        parsed_sentences = await pull_expr(uid)
+    parsed_sentences = await pull_expr(uid)
     print('building model for {}, state size: {}'.format(uid, state_size))
     return await run_in_process(PLText, '', state_size, parsed_sentences=parsed_sentences)
 
