@@ -22,10 +22,13 @@ async def generate_words(request):
 @app.route("/cleanup")
 async def cleanup(request):
     args = {a: request.args[a][0] for a in request.args}
-    try:
-        plexmark.cleanup(int(args['max_age']))
-    except KeyError:
-        plexmark.cleanup()
+
+    if 'max_age' in args:
+        max_age = int(args['max_age'])
+    else:
+        max_age = config.CLEANUP_MAX_AGE
+
+    await plexmark.cleanup(max_age)
 
 if __name__ == "__main__":
     from plexmark import PLText, PLChain

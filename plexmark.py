@@ -127,16 +127,22 @@ async def pickle_model(uid, state_size, pltext):
     os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
     await pickle_dump(pltext, os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'))
 
-def cleanup(max_age=604800):
+def clear_uid_dir(uid):
+    for filename in glob(os.path.join(DATA_DIR, uid, '*.pickle')):
+        os.remove(filename)
+
+async def cleanup(max_age):
     uid_list = [os.path.basename(filename) for filename in glob(os.path.join(DATA_DIR, '*'))]
+    now = time.time()
+    uid_cache_key = None
     try:
-        file_age = time.time() - os.path.getmtime(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
-        if file_age > max_age: # 7 days
-            for filename in glob(os.path.join(DATA_DIR, uid, '*.pickle')):
-                os.remove(filename)
-            for key in model_cache.keys():
-                if key[0] == uid:
-                    model_cache.popitem(key)
+        for uid in uid_list:
+            file_age = now - os.path.getmtime(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
+            if file_age > max_age:
+                await run_in_process(clear_uid_dir, uid)
+                if uid_cache_key == None:
+                    uid_cache_key = {key[0]: key for key in model_cache.keys()}
+                del model_cache[uid_cache_key[uid]]
     except FileNotFoundError:
         pass
 
