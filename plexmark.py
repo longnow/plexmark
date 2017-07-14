@@ -92,11 +92,8 @@ async def pull_expr(uid):
     return parsed_sentences
 
 async def pickle_expr(uid, parsed_sentences):
-    try:
-        pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
-    except FileNotFoundError:
-        os.makedirs(os.path.join(DATA_DIR, uid))
-        pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
+    os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
+    pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
 
 async def generate_model(uid, state_size):
     parsed_sentences = await pull_expr(uid)
@@ -111,9 +108,13 @@ async def pull_model(uid, state_size):
             pltext = pickle.load(open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'rb'))
         except (FileNotFoundError, EOFError):
             pltext = await generate_model(uid, state_size)
-            pickle.dump(pltext, open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
+            asyncio.ensure_future(pickle_model(uid, state_size, pltext))
         model_cache[(uid, state_size)] = pltext
     return pltext
+
+async def pickle_model(uid, state_size, pltext):
+    os.makedirs(os.path.join(DATA_DIR, uid))
+    pickle.dump(pltext, open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
 
 def cleanup(max_age=604800):
     uid_list = [os.path.basename(filename) for filename in glob(os.path.join(DATA_DIR, '*'))]
