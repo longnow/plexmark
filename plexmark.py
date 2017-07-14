@@ -37,7 +37,7 @@ class PLText(markovify.Text):
 
     def word_split(self, sentence):
         return list(sentence)
-    
+
     def word_join(self, words):
         return "".join(words)
 
@@ -68,7 +68,7 @@ class PLChain(markovify.Chain):
                 model[state][follow] += score
         return model
 
-async def all_ex(uid):
+async def pull_expr_from_db(uid):
     query = """
         SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
         FROM expr
@@ -83,7 +83,7 @@ async def all_ex(uid):
 
 async def pull_expr(uid):
     print('fetching expressions for {}'.format(uid))
-    expr_score_list = await all_ex(uid)
+    expr_score_list = await pull_expr_from_db(uid)
     parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
     try:
         pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
