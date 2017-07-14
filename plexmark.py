@@ -3,6 +3,7 @@
 
 import pickle, os, time, asyncio, concurrent, functools
 from glob import glob
+import config
 import cachetools
 import markovify
 import aiopg
@@ -11,13 +12,11 @@ model_cache = cachetools.LFUCache(6)
 
 BEGIN = "___BEGIN__"
 END = "___END__"
-DBNAME = "plx"
-USER = "yang"
 DATA_DIR = os.path.join('data')
 
 async def init():
     global pool, executor
-    pool = await aiopg.create_pool("dbname={} user={}".format(DBNAME, USER), minsize=1, maxsize=5)
+    pool = await aiopg.create_pool("dbname={} user={}".format(config.DBNAME, config.DBUSER), minsize=config.POOLMIN, maxsize=config.POOLMAX)
     executor = concurrent.futures.ProcessPoolExecutor(max_workers=3)
 
 async def run_in_process(*args, **kwargs):

@@ -1,0 +1,7 @@
+PORT = 3004
+
+DBNAME = "plx"
+DBUSER = "yang"
+
+POOLMIN = 1
+POOLMAX = 5

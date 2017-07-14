@@ -3,6 +3,7 @@
 
 from sanic import Sanic
 from sanic.response import json
+import config
 import plexmark
 
 app = Sanic()
@@ -27,4 +28,4 @@ async def cleanup(request):
 
 if __name__ == "__main__":
     from plexmark import PLText, PLChain
-    app.run(port=3004)
+    app.run(port=config.PORT)
