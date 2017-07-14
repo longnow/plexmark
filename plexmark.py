@@ -16,24 +16,24 @@ DATA_DIR = os.path.join('data')
 
 async def init():
     global pool, executor
-    pool = await aiopg.create_pool("dbname={} user={}".format(config.DBNAME, config.DBUSER), minsize=config.POOLMIN, maxsize=config.POOLMAX)
-    executor = concurrent.futures.ProcessPoolExecutor(max_workers=3)
+    pool = await aiopg.create_pool("dbname={} user={}".format(config.DB_NAME, config.DB_USER), minsize=config.DB_POOL_MIN, maxsize=config.DB_POOL_MAX)
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=config.MAX_WORKERS)
 
 async def run_in_process(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, functools.partial(*args, **kwargs))
 
-@asyncio.coroutine
-def pickle_load(path):
+def _pickle_load(path):
     return pickle.load(open(path, 'rb'))
 
-@asyncio.coroutine
-def pickle_dump(obj, path):
+async def pickle_load(*args):
+    return await run_in_process(_pickle_load, *args)
+
+def _pickle_dump(obj, path):
     pickle.dump(obj, open(path, 'wb'), pickle.HIGHEST_PROTOCOL)
 
-@asyncio.coroutine
-def makedirs(path):
-    os.makedirs(path, exist_ok=True)
+async def pickle_dump(*args):
+    return await run_in_process(_pickle_dump, *args)
 
 class PLText(markovify.Text):
 
@@ -103,7 +103,7 @@ async def pull_expr(uid):
     return parsed_sentences
 
 async def pickle_expr(uid, parsed_sentences):
-    await makedirs(os.path.join(DATA_DIR, uid))
+    os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
     await pickle_dump(parsed_sentences, os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
 
 async def generate_model(uid, state_size):
@@ -124,7 +124,7 @@ async def pull_model(uid, state_size):
     return pltext
 
 async def pickle_model(uid, state_size, pltext):
-    await makedirs(os.path.join(DATA_DIR, uid))
+    os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
     await pickle_dump(pltext, os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'))
 
 def cleanup(max_age=604800):

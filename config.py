@@ -1,9 +1,9 @@
 PORT = 3004
-
-DBNAME = "plx"
-DBUSER = "yang"
-
-POOLMIN = 1
-POOLMAX = 5
-
 REQUEST_TIMEOUT = 300
+
+DB_NAME = "plx"
+DB_USER = "yang"
+DB_POOL_MIN = 1
+DB_POOL_MAX = 5
+
+MAX_WORKERS = 3
