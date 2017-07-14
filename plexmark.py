@@ -133,15 +133,14 @@ def clear_uid_dir(uid):
 async def cleanup(max_age):
     uid_list = [os.path.basename(filename) for filename in glob(os.path.join(config.DATA_DIR, '*'))]
     now = time.time()
-    uid_cache_key = None
     try:
         for uid in uid_list:
             file_age = now - os.path.getmtime(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
             if file_age > max_age:
                 await run_in_process(clear_uid_dir, uid)
-                if uid_cache_key == None:
-                    uid_cache_key = {key[0]: key for key in model_cache.keys()}
-                del model_cache[uid_cache_key[uid]]
+                for key in model_cache.keys():
+                    if key[0] == uid:
+                        del model_cache[key]
     except FileNotFoundError:
         pass
 
