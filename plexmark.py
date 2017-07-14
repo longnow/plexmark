@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import markovify, pickle, os, time
+import pickle, os, time, concurrent, asyncio, functools
 from glob import glob
-from psycopg2.pool import SimpleConnectionPool
-from contextlib import contextmanager
+# from psycopg2.pool import SimpleConnectionPool
+# from contextlib import contextmanager
 import cachetools
+import markovify
+import aiopg
 
-model_cache = cachetools.LFUCache(6) # keep max of 6 models, expire after 10 minutes
+model_cache = cachetools.LFUCache(6)
 
 BEGIN = "___BEGIN__"
 END = "___END__"
@@ -15,15 +17,24 @@ DBNAME = "plx"
 USER = "yang"
 DATA_DIR = os.path.join('data')
 
-pool = SimpleConnectionPool(1, 3, database=DBNAME, user=USER)
+# pool = SimpleConnectionPool(1, 3, database=DBNAME, user=USER)
 
-@contextmanager
-def getcursor():
-    con = pool.getconn()
-    try:
-        yield con.cursor()
-    finally:
-        pool.putconn(con)
+async def init():
+    global pool, executor
+    pool = await aiopg.create_pool("dbname={} user={}".format(DBNAME, USER), minsize=1, maxsize=5)
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=3)
+
+async def run_in_process(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, functools.partial(*args, **kwargs))
+
+# @contextmanager
+# def getcursor():
+#     con = pool.getconn()
+#     try:
+#         yield con.cursor()
+#     finally:
+#         pool.putconn(con)
 
 class PLText(markovify.Text):
 
@@ -69,7 +80,7 @@ class PLChain(markovify.Chain):
                 model[state][follow] += score
         return model
 
-def all_ex(uid):
+async def all_ex(uid):
     query = """
         SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
         FROM expr
@@ -77,13 +88,18 @@ def all_ex(uid):
         WHERE expr.langvar = uid_langvar(%s)
         GROUP BY expr.id
         """
-    with getcursor() as cur:
-        cur.execute(query, (uid,))
-        return cur.fetchall()
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(query, (uid,))
+            return await cur.fetchall()
 
-def pull_expr(uid):
+    # with getcursor() as cur:
+    #     cur.execute(query, (uid,))
+    #     return cur.fetchall()
+
+async def pull_expr(uid):
     print('fetching expressions for {}'.format(uid))
-    expr_score_list = all_ex(uid)
+    expr_score_list = await all_ex(uid)
     parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
     try:
         pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
@@ -92,16 +108,16 @@ def pull_expr(uid):
         pickle.dump(parsed_sentences, open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
     return parsed_sentences
 
-def generate_model(uid, state_size):
+async def generate_model(uid, state_size):
     try:
         parsed_sentences = pickle.load(open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'rb'))
     except (FileNotFoundError, EOFError):
-        parsed_sentences = pull_expr(uid)
+        parsed_sentences = await pull_expr(uid)
     print('building model for {}, state size: {}'.format(uid, state_size))
-    return PLText('', state_size, parsed_sentences=parsed_sentences)
+    # return PLText('', state_size, parsed_sentences=parsed_sentences)
+    return await run_in_process(PLText, '', state_size, parsed_sentences=parsed_sentences)
 
-@cachetools.cached(model_cache)
-def pull_model(uid, state_size):
+async def pull_model(uid, state_size):
     # try:
     #     file_age = time.time() - os.path.getmtime(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
     #     if file_age > 604800: # 7 days
@@ -110,10 +126,14 @@ def pull_model(uid, state_size):
     # except FileNotFoundError:
     #     pass
     try:
-        pltext = pickle.load(open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'rb'))
-    except (FileNotFoundError, EOFError):
-        pltext = generate_model(uid, state_size)
-        pickle.dump(pltext, open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
+        pltext = model_cache[(uid, state_size)]
+    except KeyError:
+        try:
+            pltext = pickle.load(open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'rb'))
+        except (FileNotFoundError, EOFError):
+            pltext = await generate_model(uid, state_size)
+            pickle.dump(pltext, open(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'), 'wb'), pickle.HIGHEST_PROTOCOL)
+        model_cache[(uid, state_size)] = pltext
     return pltext
 
 def cleanup(max_age=604800):
@@ -129,8 +149,7 @@ def cleanup(max_age=604800):
     except FileNotFoundError:
         pass
 
-def generate_words(uid, state_size, count):
-    model = pull_model(uid, state_size)
+async def generate_words(uid, state_size, count):
+    model = await pull_model(uid, state_size)
     expr_list = [model.make_sentence(tries=100) for _ in range(count)]
-    print(model_cache.keys())
     return [expr for expr in expr_list if expr]

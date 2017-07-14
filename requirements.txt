@@ -1,4 +1,4 @@
+aiopg==0.13.0
 cachetools==2.0.0
 markovify==0.6.0
-psycopg2==2.7.1
 sanic==0.5.4
