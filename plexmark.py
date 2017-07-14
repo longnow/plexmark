@@ -26,7 +26,7 @@ async def run_in_process(*args, **kwargs):
 
 @asyncio.coroutine
 def pickle_load(path):
-    return pickle.load(open(path), 'rb')
+    return pickle.load(open(path, 'rb'))
 
 @asyncio.coroutine
 def pickle_dump(obj, path):
