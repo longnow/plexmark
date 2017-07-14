@@ -68,16 +68,6 @@ class PLChain(markovify.Chain):
                 model[state][follow] += score
         return model
 
-async def pull_expr(uid):
-    try:
-        parsed_sentences = pickle.load(open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'rb'))
-    except (FileNotFoundError, EOFError):
-        print('fetching expressions for {}'.format(uid))
-        expr_score_list = await pull_expr_from_db(uid)
-        parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
-        asyncio.ensure_future(pickle_expr(uid, parsed_sentences))
-    return parsed_sentences
-
 async def pull_expr_from_db(uid):
     query = """
         SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
@@ -90,6 +80,16 @@ async def pull_expr_from_db(uid):
         async with conn.cursor() as cur:
             await cur.execute(query, (uid,))
             return await cur.fetchall()
+
+async def pull_expr(uid):
+    try:
+        parsed_sentences = pickle.load(open(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'), 'rb'))
+    except (FileNotFoundError, EOFError):
+        print('fetching expressions for {}'.format(uid))
+        expr_score_list = await pull_expr_from_db(uid)
+        parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
+        asyncio.ensure_future(pickle_expr(uid, parsed_sentences))
+    return parsed_sentences
 
 async def pickle_expr(uid, parsed_sentences):
     try:
