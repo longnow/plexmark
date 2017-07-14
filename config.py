@@ -4,8 +4,10 @@ REQUEST_TIMEOUT = 300
 DB_NAME = "plx"
 DB_USER = "yang"
 DB_POOL_MIN = 1
-DB_POOL_MAX = 5
+DB_POOL_MAX = 3
 
-MAX_WORKERS = 3
+DATA_DIR = "/opt/local/plexmark-data"
+
+MAX_WORKERS = 5
 
 CLEANUP_MAX_AGE = 604800

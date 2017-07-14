@@ -12,7 +12,6 @@ model_cache = cachetools.LFUCache(6)
 
 BEGIN = "___BEGIN__"
 END = "___END__"
-DATA_DIR = os.path.join('data')
 
 async def init():
     global pool, executor
@@ -94,7 +93,7 @@ async def pull_expr_from_db(uid):
 
 async def pull_expr(uid):
     try:
-        parsed_sentences = await pickle_load(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
+        parsed_sentences = await pickle_load(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
     except (FileNotFoundError, EOFError):
         print('fetching expressions for {}'.format(uid))
         expr_score_list = await pull_expr_from_db(uid)
@@ -103,8 +102,8 @@ async def pull_expr(uid):
     return parsed_sentences
 
 async def pickle_expr(uid, parsed_sentences):
-    os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
-    await pickle_dump(parsed_sentences, os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
+    os.makedirs(os.path.join(config.DATA_DIR, uid), exist_ok=True)
+    await pickle_dump(parsed_sentences, os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
 
 async def generate_model(uid, state_size):
     parsed_sentences = await pull_expr(uid)
@@ -116,7 +115,7 @@ async def pull_model(uid, state_size):
         pltext = model_cache[(uid, state_size)]
     except KeyError:
         try:
-            pltext = await pickle_load(os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'))
+            pltext = await pickle_load(os.path.join(config.DATA_DIR, uid, str(state_size) + '.pickle'))
         except (FileNotFoundError, EOFError):
             pltext = await generate_model(uid, state_size)
             asyncio.ensure_future(pickle_model(uid, state_size, pltext))
@@ -124,20 +123,20 @@ async def pull_model(uid, state_size):
     return pltext
 
 async def pickle_model(uid, state_size, pltext):
-    os.makedirs(os.path.join(DATA_DIR, uid), exist_ok=True)
-    await pickle_dump(pltext, os.path.join(DATA_DIR, uid, str(state_size) + '.pickle'))
+    os.makedirs(os.path.join(config.DATA_DIR, uid), exist_ok=True)
+    await pickle_dump(pltext, os.path.join(config.DATA_DIR, uid, str(state_size) + '.pickle'))
 
 def clear_uid_dir(uid):
-    for filename in glob(os.path.join(DATA_DIR, uid, '*.pickle')):
+    for filename in glob(os.path.join(config.DATA_DIR, uid, '*.pickle')):
         os.remove(filename)
 
 async def cleanup(max_age):
-    uid_list = [os.path.basename(filename) for filename in glob(os.path.join(DATA_DIR, '*'))]
+    uid_list = [os.path.basename(filename) for filename in glob(os.path.join(config.DATA_DIR, '*'))]
     now = time.time()
     uid_cache_key = None
     try:
         for uid in uid_list:
-            file_age = now - os.path.getmtime(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
+            file_age = now - os.path.getmtime(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
             if file_age > max_age:
                 await run_in_process(clear_uid_dir, uid)
                 if uid_cache_key == None:
