@@ -8,7 +8,7 @@ import cachetools
 import markovify
 import aiopg
 
-model_cache = cachetools.LFUCache(6)
+model_cache = cachetools.LFUCache(10)
 
 BEGIN = "___BEGIN__"
 END = "___END__"
@@ -34,13 +34,24 @@ def _pickle_dump(obj, path):
 async def pickle_dump(*args):
     return await run_in_process(_pickle_dump, *args)
 
+def rejoin_text(parsed_sentences, uid):
+    try:
+        rejoined_text = model_cache[uid]
+    except KeyError:
+        rejoined_text = {''.join(ex[0]) for ex in parsed_sentences}
+        model_cache[uid] = rejoined_text
+    return rejoined_text
+
 class PLText(markovify.Text):
 
-    def __init__(self, input_text, state_size=2, chain=None, parsed_sentences=None):
+    # def __init__(self, input_text, state_size=2, chain=None, parsed_sentences=None):
+    def __init__(self, uid, state_size, parsed_sentences)
+        self.uid = uid
         self.state_size = state_size
-        self.parsed_sentences = parsed_sentences or list(self.generate_corpus(input_text))
-        self.rejoined_text = {''.join(ex[0]) for ex in self.parsed_sentences}
-        self.chain = chain or PLChain(self.parsed_sentences, state_size)
+        self.parsed_sentences = parsed_sentences
+        # self.rejoined_text = {''.join(ex[0]) for ex in self.parsed_sentences}
+        self.rejoined_text = rejoin_text(self.parsed_sentences, self.uid)
+        self.chain = PLChain(self.parsed_sentences, state_size)
 
     def sentence_split(self, ex_list):
         return ex_list
@@ -108,7 +119,7 @@ async def pickle_expr(uid, parsed_sentences):
 async def generate_model(uid, state_size):
     parsed_sentences = await pull_expr(uid)
     print('building model for {}, state size: {}'.format(uid, state_size))
-    return await run_in_process(PLText, '', state_size, parsed_sentences=parsed_sentences)
+    return await run_in_process(PLText, uid=uid, state_size=state_size, parsed_sentences=parsed_sentences)
 
 async def pull_model(uid, state_size):
     try:
