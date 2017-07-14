@@ -22,11 +22,6 @@ async def cleanup(request):
     args = {a: request.args[a][0] for a in request.args}
     plexmark.cleanup(int(args['max_age']))
 
-@app.route("/test")
-async def test(request):
-    args = {a: request.args[a][0] for a in request.args}
-    return json(await plexmark.test())
-
 if __name__ == "__main__":
     from plexmark import PLText, PLChain
     app.run(port=3004)

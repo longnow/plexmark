@@ -3,8 +3,6 @@
 
 import pickle, os, time, concurrent, asyncio, functools
 from glob import glob
-# from psycopg2.pool import SimpleConnectionPool
-# from contextlib import contextmanager
 import cachetools
 import markovify
 import aiopg
@@ -17,8 +15,6 @@ DBNAME = "plx"
 USER = "yang"
 DATA_DIR = os.path.join('data')
 
-# pool = SimpleConnectionPool(1, 3, database=DBNAME, user=USER)
-
 async def init():
     global pool, executor
     pool = await aiopg.create_pool("dbname={} user={}".format(DBNAME, USER), minsize=1, maxsize=5)
@@ -27,14 +23,6 @@ async def init():
 async def run_in_process(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, functools.partial(*args, **kwargs))
-
-# @contextmanager
-# def getcursor():
-#     con = pool.getconn()
-#     try:
-#         yield con.cursor()
-#     finally:
-#         pool.putconn(con)
 
 class PLText(markovify.Text):
 
@@ -93,10 +81,6 @@ async def all_ex(uid):
             await cur.execute(query, (uid,))
             return await cur.fetchall()
 
-    # with getcursor() as cur:
-    #     cur.execute(query, (uid,))
-    #     return cur.fetchall()
-
 async def pull_expr(uid):
     print('fetching expressions for {}'.format(uid))
     expr_score_list = await all_ex(uid)
@@ -114,17 +98,9 @@ async def generate_model(uid, state_size):
     except (FileNotFoundError, EOFError):
         parsed_sentences = await pull_expr(uid)
     print('building model for {}, state size: {}'.format(uid, state_size))
-    # return PLText('', state_size, parsed_sentences=parsed_sentences)
     return await run_in_process(PLText, '', state_size, parsed_sentences=parsed_sentences)
 
 async def pull_model(uid, state_size):
-    # try:
-    #     file_age = time.time() - os.path.getmtime(os.path.join(DATA_DIR, uid, 'expr_score_list.pickle'))
-    #     if file_age > 604800: # 7 days
-    #         for filename in glob(os.path.join(DATA_DIR, uid, '*.pickle')):
-    #             os.remove(filename)
-    # except FileNotFoundError:
-    #     pass
     try:
         pltext = model_cache[(uid, state_size)]
     except KeyError:
