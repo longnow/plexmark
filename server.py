@@ -29,6 +29,7 @@ async def cleanup(request):
         max_age = config.CLEANUP_MAX_AGE
 
     await plexmark.cleanup(max_age)
+    return ''
 
 if __name__ == "__main__":
     from plexmark import PLText, PLChain
