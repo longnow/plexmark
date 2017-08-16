@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pickle, os, time, asyncio, concurrent, functools
+import pickle, os, time, asyncio, concurrent, functools, bisect, random
 from glob import glob
+from itertools import accumulate
 import config
 import cachetools
-import markovify
+# import markovify
 import aiopg
 
 model_cache = cachetools.LFUCache(10)
 
-BEGIN = "___BEGIN__"
-END = "___END__"
+BEGIN = "\u0002" # Start of Text
+END = "\u0003" # End of Text
 
 async def init():
     global pool, executor
@@ -34,60 +35,111 @@ def _pickle_dump(obj, path):
 async def pickle_dump(*args):
     return await run_in_process(_pickle_dump, *args)
 
-def rejoin_text(parsed_sentences, uid):
-    try:
-        rejoined_text = model_cache[uid]
-    except KeyError:
-        rejoined_text = {''.join(ex[0]) for ex in parsed_sentences}
-        model_cache[uid] = rejoined_text
-    return rejoined_text
-
-class PLText(markovify.Text):
-
-    # def __init__(self, input_text, state_size=2, chain=None, parsed_sentences=None):
-    def __init__(self, uid, state_size, parsed_sentences)
+class PLText:
+    
+    def __init__(self, uid, state_size, expr_score_list, chain=None):
         self.uid = uid
         self.state_size = state_size
-        self.parsed_sentences = parsed_sentences
-        # self.rejoined_text = {''.join(ex[0]) for ex in self.parsed_sentences}
-        self.rejoined_text = rejoin_text(self.parsed_sentences, self.uid)
-        self.chain = PLChain(self.parsed_sentences, state_size)
+        self.expr_set = {ex[0] for ex in expr_score_list}
+        self.chain = chain or PLChain(expr_score_list, state_size)
 
-    def sentence_split(self, ex_list):
-        return ex_list
+    def test_expr_output(self, expr):
+        return expr not in self.expr_set
 
-    def word_split(self, sentence):
-        return list(sentence)
-
-    def word_join(self, words):
-        return "".join(words)
-
-    def test_sentence_input(self, sentence):
-        return True
-
-    def test_sentence_output(self, words, *args, **kwargs):
-        return ''.join(words) not in self.rejoined_text
-
-    def generate_corpus(self, text):
-        return map(lambda x: (list(x[0]), x[1]), text)
-
-class PLChain(markovify.Chain):
+    def make_sentence(self, init_state=None, tries=10, test_output=True, max_chars=None, probability=False):
+        for _ in range(tries):
+            if init_state:
+                if init_state[0] == BEGIN:
+                    prefix = init_state[1:]
+                else:
+                    prefix = init_state
+            else:
+                prefix = ''
+            if probability:
+                expr, prob = self.chain.walk(init_state, probability)
+                expr = prefix + expr
+            else:
+                expr = prefix + self.chain.walk(init_state, probability)
+            if max_chars and len(expr) > max_chars:
+                continue
+            if test_output:
+                if self.test_expr_output(expr):
+                    if probability:
+                        return expr, prob
+                    else:
+                        return expr
+            else:
+                if probability:
+                    return expr, prob
+                else:
+                    return expr
+        
+class PLChain:
+    def __init__(self, corpus, state_size, model=None):
+        self.state_size = state_size
+        self.model = model or self.build(corpus, self.state_size)
+        self.precompute_begin_state()
+    
     def build(self, corpus, state_size):
         model = {}
-
         for run, score in corpus:
-            items = ([ BEGIN ] * state_size) + run + [ END ]
+            items = (BEGIN * state_size) + run + END
             for i in range(len(run) + 1):
-                state = tuple(items[i:i+state_size])
+                state = items[i:i+state_size]
                 follow = items[i+state_size]
                 if state not in model:
                     model[state] = {}
-
                 if follow not in model[state]:
                     model[state][follow] = 0
-
                 model[state][follow] += score
         return model
+
+    def precompute_begin_state(self):
+        begin_state = BEGIN * self.state_size
+        choices, weights = zip(*self.model[begin_state].items())
+        cumdist = list(accumulate(weights))
+        self.begin_cumdist = cumdist
+        self.begin_choices = choices
+        self.begin_weights = weights
+
+    def move(self, state, probability=False):
+        if state == BEGIN * self.state_size:
+            choices = self.begin_choices
+            cumdist = self.begin_cumdist
+            weights = self.begin_weights
+        else:
+            choices, weights = zip(*self.model[state].items())
+            cumdist = list(accumulate(weights))
+        r = random.random() * cumdist[-1]
+        index = bisect.bisect(cumdist, r)
+        selection = choices[index]
+        if probability:
+            prob = weights[index] / cumdist[-1]
+            return selection, prob
+        return selection
+
+    def gen(self, init_state=None, probability=False):
+        state = init_state or BEGIN * self.state_size
+        while True:
+            next_char = self.move(state)
+            if next_char == END: break
+            yield next_char
+            state = state[1:] + next_char
+
+    def walk(self, init_state=None, probability=False):
+        if probability:
+            state = init_state or BEGIN * self.state_size
+            output = ''
+            output_prob = 1
+            while True:
+                next_char, prob = self.move(state, probability)
+                output_prob *= prob
+                if next_char == END: break
+                output += next_char
+                state = state[1:] + next_char
+            return output, output_prob
+        else:
+            return ''.join(list(self.gen(init_state, probability)))
 
 async def pull_expr_from_db(uid):
     query = """
@@ -104,22 +156,21 @@ async def pull_expr_from_db(uid):
 
 async def pull_expr(uid):
     try:
-        parsed_sentences = await pickle_load(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
+        expr_score_list = await pickle_load(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
     except (FileNotFoundError, EOFError):
         print('fetching expressions for {}'.format(uid))
         expr_score_list = await pull_expr_from_db(uid)
-        parsed_sentences = [(list(ex[0]), ex[1]) for ex in expr_score_list]
-        asyncio.ensure_future(pickle_expr(uid, parsed_sentences))
-    return parsed_sentences
+        asyncio.ensure_future(pickle_expr(uid, expr_score_list))
+    return expr_score_list
 
-async def pickle_expr(uid, parsed_sentences):
+async def pickle_expr(uid, expr_score_list):
     os.makedirs(os.path.join(config.DATA_DIR, uid), exist_ok=True)
-    await pickle_dump(parsed_sentences, os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
+    await pickle_dump(expr_score_list, os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
 
 async def generate_model(uid, state_size):
-    parsed_sentences = await pull_expr(uid)
+    expr_score_list = await pull_expr(uid)
     print('building model for {}, state size: {}'.format(uid, state_size))
-    return await run_in_process(PLText, uid=uid, state_size=state_size, parsed_sentences=parsed_sentences)
+    return await run_in_process(PLText, uid=uid, state_size=state_size, expr_score_list=expr_score_list)
 
 async def pull_model(uid, state_size):
     try:
