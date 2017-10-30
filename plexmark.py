@@ -73,7 +73,14 @@ class PLText:
                     return expr, prob
                 else:
                     return expr
-        
+
+    def expr_prob(self, expr):
+        prepped_expr = BEGIN * self.state_size + expr + END
+        output = 1
+        for i in range(len(expr) + 1):
+            output *= self.chain.prob(prepped_expr[i:i+self.state_size], prepped_expr[i+self.state_size])
+        return output
+
 class PLChain:
     def __init__(self, corpus, state_size, model=None):
         self.state_size = state_size
@@ -141,6 +148,13 @@ class PLChain:
         else:
             return ''.join(list(self.gen(init_state, probability)))
 
+    def prob(self, state, char):
+        try:
+            total_score = sum(self.model[state].values())
+            return self.model[state][char] / total_score
+        except KeyError:
+            return 0.0
+
 async def pull_expr_from_db(uid):
     query = """
         SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
@@ -195,18 +209,21 @@ def clear_uid_dir(uid):
 async def cleanup(max_age):
     uid_list = [os.path.basename(filename) for filename in glob(os.path.join(config.DATA_DIR, '*'))]
     now = time.time()
-    try:
-        for uid in uid_list:
+    for uid in uid_list:
+        try:
             file_age = now - os.path.getmtime(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
+            print("{} age is {}".format(uid, file_age))
             if file_age > max_age:
+                print(uid + " is old. clearing...")
                 await run_in_process(clear_uid_dir, uid)
                 for key in model_cache.keys():
                     if key[0] == uid:
                         del model_cache[key]
-    except FileNotFoundError:
-        pass
+        except FileNotFoundError:
+            pass
 
 async def generate_words(uid, state_size, count):
     model = await pull_model(uid, state_size)
     expr_list = [model.make_sentence(tries=100) for _ in range(count)]
     return [expr for expr in expr_list if expr]
+
