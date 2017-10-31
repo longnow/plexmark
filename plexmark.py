@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pickle, os, time, asyncio, concurrent, functools, bisect, random
+import pickle, os, time, asyncio, concurrent, functools, bisect, random, shutil
 from glob import glob
 from itertools import accumulate
 import config
@@ -155,31 +155,26 @@ class PLChain:
         except KeyError:
             return 0.0
 
-async def pull_expr_from_db(uid):
-    query = """
-        SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
-        FROM expr
-        JOIN denotationx ON (denotationx.expr = expr.id)
-        WHERE expr.langvar = uid_langvar(%s)
-        GROUP BY expr.id
-        """
+async def pull_expr(uid, cache=True):
+    if cache:
+        query = """
+   	        SELECT txt, score
+   	        FROM exprx
+   	        WHERE langvar = uid_langvar(%s)
+   	        """
+    else:
+	    query = """
+	       SELECT expr.txt, grp_quality_score(array_agg(denotationx.grp), array_agg(denotationx.quality))
+	       FROM expr
+	       JOIN denotationx ON (denotationx.expr = expr.id)
+	       WHERE expr.langvar = uid_langvar(%s)
+	       GROUP BY expr.id
+	       """
+    print('fetching expressions for {}'.format(uid))
     async with pool.acquire() as conn:
         async with conn.cursor() as cur:
             await cur.execute(query, (uid,), timeout=config.REQUEST_TIMEOUT)
             return await cur.fetchall()
-
-async def pull_expr(uid):
-    try:
-        expr_score_list = await pickle_load(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
-    except (FileNotFoundError, EOFError):
-        print('fetching expressions for {}'.format(uid))
-        expr_score_list = await pull_expr_from_db(uid)
-        asyncio.ensure_future(pickle_expr(uid, expr_score_list))
-    return expr_score_list
-
-async def pickle_expr(uid, expr_score_list):
-    os.makedirs(os.path.join(config.DATA_DIR, uid), exist_ok=True)
-    await pickle_dump(expr_score_list, os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
 
 async def generate_model(uid, state_size):
     expr_score_list = await pull_expr(uid)
@@ -211,11 +206,13 @@ async def cleanup(max_age):
     now = time.time()
     for uid in uid_list:
         try:
-            file_age = now - os.path.getmtime(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
+            # file_age = now - os.path.getmtime(os.path.join(config.DATA_DIR, uid, 'expr_score_list.pickle'))
+            file_age = now - os.path.getctime(os.path.join(config.DATA_DIR, uid))
             print("{} age is {}".format(uid, file_age))
             if file_age > max_age:
                 print(uid + " is old. clearing...")
-                await run_in_process(clear_uid_dir, uid)
+                # await run_in_process(clear_uid_dir, uid)
+                shutil.rmtree(os.path.join(config.DATA_DIR, uid))
                 for key in model_cache.keys():
                     if key[0] == uid:
                         del model_cache[key]
