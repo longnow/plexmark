@@ -93,8 +93,9 @@ class PLChain:
         model = {}
         model = defaultdict(lambda: defaultdict(int))
         for run, score in corpus:
-            items = (BEGIN * state_size) + unicodedata.normalize("NFD", run) + END
-            for i in range(len(run) + 1):
+            norm_run = unicodedata.normalize("NFD", run)
+            items = (BEGIN * state_size) + norm_run + END
+            for i in range(len(norm_run) + 1):
                 state = items[i:i+state_size]
                 follow = items[i+state_size]
                 # if state not in model:
