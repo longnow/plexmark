@@ -103,3 +103,5 @@ ENV/
 data/
 secrets.py
 bot.py
+
+.vscode/

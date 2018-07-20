@@ -4,6 +4,7 @@
 import pickle, os, time, asyncio, concurrent, functools, bisect, random, shutil
 from glob import glob
 from itertools import accumulate
+import unicodedata2 as unicodedata
 import config
 import cachetools
 # import markovify
@@ -90,7 +91,7 @@ class PLChain:
     def build(self, corpus, state_size):
         model = {}
         for run, score in corpus:
-            items = (BEGIN * state_size) + run + END
+            items = (BEGIN * state_size) + unicodedata.normalize("NFD", run) + END
             for i in range(len(run) + 1):
                 state = items[i:i+state_size]
                 follow = items[i+state_size]
