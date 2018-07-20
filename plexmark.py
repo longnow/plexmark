@@ -4,6 +4,7 @@
 import pickle, os, time, asyncio, concurrent, functools, bisect, random, shutil
 from glob import glob
 from itertools import accumulate
+from collections import defaultdict
 import unicodedata2 as unicodedata
 import config
 import cachetools
@@ -90,16 +91,18 @@ class PLChain:
     
     def build(self, corpus, state_size):
         model = {}
+        model = defaultdict(lambda: defaultdict(int))
         for run, score in corpus:
             items = (BEGIN * state_size) + unicodedata.normalize("NFD", run) + END
             for i in range(len(run) + 1):
                 state = items[i:i+state_size]
                 follow = items[i+state_size]
-                if state not in model:
-                    model[state] = {}
-                if follow not in model[state]:
-                    model[state][follow] = 0
+                # if state not in model:
+                #     model[state] = {}
+                # if follow not in model[state]:
+                #     model[state][follow] = 0
                 model[state][follow] += score
+        model = dict({k: dict(model[k]) for k in model})
         return model
 
     def precompute_begin_state(self):
