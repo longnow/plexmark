@@ -64,13 +64,19 @@ class PLText:
                     expr = prefix + self.chain.walk(init_state, probability)
             except KeyError:
                 expr, prob = "", 0
-            if test_output:
-                if self.test_expr_output(expr):
-                    if skip_re and not re.search(unicodedata.normalize("NFD", skip_re), expr):
+            if test_output and self.test_expr_output(expr):
+                if skip_re: 
+                    if not re.search(unicodedata.normalize("NFD", skip_re), expr):
                         if probability:
                             return expr, prob
                         else:
                             return expr
+                else:
+                    if probability:
+                            return expr, prob
+                        else:
+                            return expr
+
             else:
                 if probability:
                     return expr, prob
