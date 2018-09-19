@@ -49,6 +49,7 @@ class PLText:
         return unicodedata.normalize("NFC", expr) not in self.expr_set
 
     def make_expr(self, init_state=None, tries=10, test_output=True, skip_re=r"", probability=False):
+        found = False
         for _ in range(tries):
             if init_state:
                 init_state = unicodedata.normalize("NFD", init_state)
@@ -64,20 +65,16 @@ class PLText:
                     expr = prefix + self.chain.walk(init_state, probability)
             except KeyError:
                 expr, prob = "", 0
-            if test_output and self.test_expr_output(expr):
-                if skip_re: 
-                    if not re.search(unicodedata.normalize("NFD", skip_re), expr):
-                        if probability:
-                            return expr, prob
-                        else:
-                            return expr
-                else:
-                    if probability:
-                        return expr, prob
+            if test_output:
+                if self.test_expr_output(expr):
+                    if skip_re:
+                        if not re.search(unicodedata.normalize("NFD", skip_re), expr):
+                            found = True
                     else:
-                        return expr
-
+                        found = True
             else:
+                found = True
+            if found:
                 if probability:
                     return expr, prob
                 else:
@@ -227,8 +224,8 @@ async def cleanup(max_age):
         except FileNotFoundError:
             pass
 
-async def generate_words(uid, state_size, count, init_state=None):
+async def generate_words(uid, state_size, count, init_state=None, skip_re=r""):
     model = await pull_model(uid, state_size)
-    expr_list = [model.make_expr(init_state=init_state, tries=100) for _ in range(count)]
+    expr_list = [model.make_expr(init_state=init_state, tries=100, skip_re=skip_re) for _ in range(count)]
     return [expr for expr in expr_list if expr]
 
