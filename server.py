@@ -16,7 +16,12 @@ async def init(app, loop):
 @app.route("/")
 async def generate_words(request):
     args = {a: request.args[a][0] for a in request.args}
-    expr_list = await plexmark.generate_words(args['uid'], int(args['state_size']), int(args['count']))
+    uid, state_size, count = args['uid'], int(args['state_size']), int(args['count'])
+    try:
+        init_state = args['init_state']
+    except KeyError:
+        init_state = None
+    expr_list = await plexmark.generate_words(uid, state_size, count, init_state)
     return json(expr_list)
 
 @app.route("/cleanup")
