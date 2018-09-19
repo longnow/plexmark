@@ -6,9 +6,9 @@ from glob import glob
 from itertools import accumulate
 from collections import defaultdict
 import unicodedata2 as unicodedata
+import regex as re
 import config
 import cachetools
-# import markovify
 import aiopg
 
 model_cache = cachetools.LFUCache(10)
@@ -48,7 +48,7 @@ class PLText:
     def test_expr_output(self, expr):
         return unicodedata.normalize("NFC", expr) not in self.expr_set
 
-    def make_sentence(self, init_state=None, tries=10, test_output=True, max_chars=None, probability=False):
+    def make_expr(self, init_state=None, tries=10, test_output=True, skip_re=r"", probability=False):
         for _ in range(tries):
             if init_state:
                 init_state = unicodedata.normalize("NFD", init_state)
@@ -64,14 +64,13 @@ class PLText:
                     expr = prefix + self.chain.walk(init_state, probability)
             except KeyError:
                 expr, prob = "", 0
-            if max_chars and len(expr) > max_chars:
-                continue
             if test_output:
                 if self.test_expr_output(expr):
-                    if probability:
-                        return expr, prob
-                    else:
-                        return expr
+                    if skip_re and not re.search(unicodedata.normalize("NFD", skip_re), expr):
+                        if probability:
+                            return expr, prob
+                        else:
+                            return expr
             else:
                 if probability:
                     return expr, prob
@@ -224,6 +223,6 @@ async def cleanup(max_age):
 
 async def generate_words(uid, state_size, count, init_state=None):
     model = await pull_model(uid, state_size)
-    expr_list = [model.make_sentence(init_state=init_state, tries=100) for _ in range(count)]
+    expr_list = [model.make_expr(init_state=init_state, tries=100) for _ in range(count)]
     return [expr for expr in expr_list if expr]
 

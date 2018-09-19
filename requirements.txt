@@ -1,4 +1,12 @@
-aiopg==0.13.0
-cachetools==2.0.0
-markovify==0.6.0
-sanic==0.5.4
+aiofiles==0.4.0
+aiopg==0.15.0
+cachetools==2.1.0
+httptools==0.0.11
+multidict==4.4.2
+psycopg2==2.7.5
+regex==2018.8.29
+sanic==0.8.3
+ujson==1.35
+unicodedata2==11.0.0
+uvloop==0.11.2
+websockets==5.0.1
