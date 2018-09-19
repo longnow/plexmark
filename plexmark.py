@@ -73,9 +73,9 @@ class PLText:
                             return expr
                 else:
                     if probability:
-                            return expr, prob
-                        else:
-                            return expr
+                        return expr, prob
+                    else:
+                        return expr
 
             else:
                 if probability:
