@@ -46,7 +46,7 @@ class PLText:
         self.chain = chain or PLChain(expr_score_list, state_size)
 
     def test_expr_output(self, expr):
-        return expr not in self.expr_set
+        return unicodedata.normalize("NFC", expr) not in self.expr_set
 
     def make_sentence(self, init_state=None, tries=10, test_output=True, max_chars=None, probability=False):
         for _ in range(tries):
