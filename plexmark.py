@@ -51,19 +51,19 @@ class PLText:
     def make_sentence(self, init_state=None, tries=10, test_output=True, max_chars=None, probability=False):
         for _ in range(tries):
             if init_state:
+                init_state = unicodedata.normalize("NFD", init_state)
                 prefix = init_state.strip(BEGIN)
                 init_state = init_state.rjust(self.state_size, BEGIN)[-self.state_size:]
-                # if init_state[0] == BEGIN:
-                #     prefix = init_state[1:]
-                # else:
-                #     prefix = init_state
             else:
                 prefix = ''
-            if probability:
-                expr, prob = self.chain.walk(init_state, probability)
-                expr = prefix + expr
-            else:
-                expr = prefix + self.chain.walk(init_state, probability)
+            try:
+                if probability:
+                    expr, prob = self.chain.walk(init_state, probability)
+                    expr = prefix + expr
+                else:
+                    expr = prefix + self.chain.walk(init_state, probability)
+            except KeyError:
+                expr, prob = "", 0
             if max_chars and len(expr) > max_chars:
                 continue
             if test_output:
@@ -100,10 +100,6 @@ class PLChain:
             for i in range(len(norm_run) + 1):
                 state = items[i:i+state_size]
                 follow = items[i+state_size]
-                # if state not in model:
-                #     model[state] = {}
-                # if follow not in model[state]:
-                #     model[state][follow] = 0
                 model[state][follow] += score
         model = dict({k: dict(model[k]) for k in model})
         return model
@@ -141,6 +137,7 @@ class PLChain:
             state = state[1:] + next_char
 
     def walk(self, init_state=None, probability=False):
+        if init_state not in 
         if probability:
             state = init_state or BEGIN * self.state_size
             output = ''
