@@ -51,10 +51,12 @@ class PLText:
     def make_sentence(self, init_state=None, tries=10, test_output=True, max_chars=None, probability=False):
         for _ in range(tries):
             if init_state:
-                if init_state[0] == BEGIN:
-                    prefix = init_state[1:]
-                else:
-                    prefix = init_state
+                init_state = init_state.rjust(self.state_size, BEGIN)[-self.state_size:]
+                prefix = init_state.strip(BEGIN)
+                # if init_state[0] == BEGIN:
+                #     prefix = init_state[1:]
+                # else:
+                #     prefix = init_state
             else:
                 prefix = ''
             if probability:
