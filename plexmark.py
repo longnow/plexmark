@@ -226,8 +226,8 @@ async def cleanup(max_age):
         except FileNotFoundError:
             pass
 
-async def generate_words(uid, state_size, count):
+async def generate_words(uid, state_size, count, init_state=None):
     model = await pull_model(uid, state_size)
-    expr_list = [model.make_sentence(tries=100) for _ in range(count)]
+    expr_list = [model.make_sentence(init_state=init_state, tries=100) for _ in range(count)]
     return [expr for expr in expr_list if expr]
 
