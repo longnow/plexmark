@@ -137,7 +137,6 @@ class PLChain:
             state = state[1:] + next_char
 
     def walk(self, init_state=None, probability=False):
-        if init_state not in 
         if probability:
             state = init_state or BEGIN * self.state_size
             output = ''
