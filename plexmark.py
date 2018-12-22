@@ -42,11 +42,11 @@ class PLText:
     def __init__(self, uid, state_size, expr_score_list, chain=None):
         self.uid = uid
         self.state_size = state_size
-        self.expr_set = {ex[0] for ex in expr_score_list}
+        self.expr_set = {unicodedata.normalize("NFD", ex[0]) for ex in expr_score_list}
         self.chain = chain or PLChain(expr_score_list, state_size)
 
     def test_expr_output(self, expr):
-        return unicodedata.normalize("NFC", expr) not in self.expr_set
+        return expr not in self.expr_set
 
     def make_expr(self, init_state=None, tries=10, test_output=True, skip_re=r"", probability=False):
         found = False
@@ -81,7 +81,7 @@ class PLText:
                     return expr
 
     def expr_prob(self, expr):
-        prepped_expr = BEGIN * self.state_size + expr + END
+        prepped_expr = BEGIN * self.state_size + unicodedata.normalize("NFD", expr) + END
         output = 1
         for i in range(len(expr) + 1):
             output *= self.chain.prob(prepped_expr[i:i+self.state_size], prepped_expr[i+self.state_size])
