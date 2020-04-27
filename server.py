@@ -6,7 +6,7 @@ from sanic.response import json
 import config
 import plexmark
 
-app = Sanic()
+app = Sanic(name="plexmark")
 app.config.from_object(config)
 
 @app.listener("before_server_start")

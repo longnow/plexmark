@@ -5,7 +5,7 @@ import pickle, os, time, asyncio, concurrent, functools, bisect, random, shutil
 from glob import glob
 from itertools import accumulate
 from collections import defaultdict
-import unicodedata2 as unicodedata
+import unicodedataplus as unicodedata
 import regex as re
 import config
 import cachetools
